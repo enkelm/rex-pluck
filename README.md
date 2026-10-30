@@ -1,6 +1,6 @@
 # Pluck for Rex
 
-Standalone version **0.1.0**. This is a local, unpublished release; licensing is not yet settled.
+Standalone version **0.1.0**, licensed under [MIT](LICENSE).
 See [NOTICE.md](NOTICE.md) for provenance and attribution.
 
 Press **Cmd+Shift+Y**, or choose **Pluck: Copy Token** in Rex's command palette.
@@ -57,22 +57,22 @@ approximated; unusual fonts or terminal-specific width rules may differ. A token
 is not offered as a complete copy target. Zoom enlarges the picker, not the captured source terminal.
 
 Captured text stays in memory, never in temporary files or process arguments. Terminal controls are stripped rather
-than replayed. Long histories are read from the tail of each pane's pinned Rex snapshot, with at most four panes
-being captured concurrently. Each capture is bounded to 4 MiB; the tab is limited to 64 panes and one million total
+than replayed. Long histories are read sequentially from the tail of each pane's pinned Rex snapshot. Each capture is bounded to 4 MiB; the tab is limited to 64 panes and one million total
 captured screen cells. Copied tokens have a 64 KiB limit. Unsupported or expired captures fail visibly rather than
 silently skipping a source pane or selecting another tab.
 
 ## Setup
 
-Requires Rex, Node, and a POSIX shell. There are no npm runtime dependencies, no fzf requirement,
-and no Hunk or Pi dependency. Tested on macOS 27.2 with Rex `0.0.1793131181-gdd9a20` and Node 24.20.0.
+Requires Rex, a POSIX shell, and standard terminal tools (`cat` and `stty`). The runtime is Rex's
+embedded Lua: no Node, Python, LuaJIT, npm packages, fzf, Hunk, or Pi dependency. Tested on macOS 27.2
+with Rex `0.0.1793131181-gdd9a20`.
 These are tested versions, not minimum requirements. Linux, native Windows, and mixed-version remote
 Rex installations have not been validated. Programs run on the Rex server's machine.
 
 Clone the complete standalone repository into a fresh destination:
 
 ```sh
-extension="${XDG_CONFIG_HOME:-$HOME/.config}/rex/extensions/rex-pluck"
+extension="${XDG_CONFIG_HOME:-$HOME/.config}/rex/rex-pluck"
 # Replace /path/to/rex-pluck with the source checkout or repository URL.
 git clone --branch v0.1.0 /path/to/rex-pluck "$extension"
 ```
@@ -80,15 +80,18 @@ git clone --branch v0.1.0 /path/to/rex-pluck "$extension"
 Append to your **existing** Rex `init.lua` (or the file named by `REX_CONFIG`); do not replace it:
 
 ```lua
-local config = os.getenv("XDG_CONFIG_HOME") or os.getenv("HOME") .. "/.config"
-dofile(config .. "/rex/extensions/rex-pluck/init.lua")
+require("rex-pluck").setup()
 ```
 
-You can instead `dofile` an absolute path to this checkout's root `init.lua`. Keep the checkout in
-place; sibling runtime paths are resolved relative to the module. Do not load an older Pluck copy as well.
+Rex resolves the module directly below its config directory, just like `rex-worktrunk`. A development
+checkout can be symlinked to that path. Custom module locations can use
+`package.path = "/path/to/modules/?/init.lua;" .. package.path` before requiring it.
+Keep the complete checkout in place; runtime paths resolve relative to it. Do not also load an older copy.
 
-The launcher uses Rex's login-shell PATH, falls back to the default nvm Node, and accepts
-`REX_PLUCK_NODE` as an explicit Node executable. Then run:
+Requiring is inert. `setup()` registers the action and default shortcut, returns the module, and can
+run again after reload while an existing picker remains reusable. The launcher uses Rex's login-shell
+PATH; `REX_BIN_DIR` can prepend a directory containing Rex. The former `REX_PLUCK_NODE` override is no
+longer used. Then run:
 
 ```sh
 rex config check
@@ -107,23 +110,29 @@ rex do pluck_copy -s "$REX_SESSION" -b "$REX_BLOCK"
 
 Check for local changes before fetching and checking out a new release tag; never reset a modified
 checkout. Run `rex config check && rex config reload` after updating. A running picker keeps its frozen
-data and old process: close it with Esc, then reopen. To uninstall, close the picker, remove the `dofile`
-line, reload Rex, and remove the checkout. No snapshots or clipboard history are stored by this module.
+data and old process: close it with Esc, then reopen. To uninstall, close the picker, remove the
+`require("rex-pluck").setup()` line, reload Rex, and remove the checkout. No snapshots or clipboard history are stored by this module.
 
 ## Validation
 
-Development tools: Node (tested with 24.20.0), Python 3 for PTYs, LuaJIT for config fixtures, and
-ShellCheck for linting. They are not npm dependencies. A live Rex server is not needed by the automated suite.
-From the repository root:
+Tests and assertions are Lua. Development tools are Rex, LuaJIT (unit/config cases and syntax),
+ShellCheck, and Python 3 (standard-library PTY transport only). No packages or build step are needed.
+A running user server is never required: integration starts disposable servers and synthetic terminals.
 
 ```sh
-npm test
-npm run check  # Node syntax, Lua bytecode, shell syntax, ShellCheck
+sh scripts/test.sh --unit  # LuaJIT; no Rex installation required
+sh scripts/test.sh         # all cases, including real Rex/PTY integration
+sh scripts/check.sh        # Lua, shell/ShellCheck, Python syntax
 ```
 
-Paths are independent of the caller's working directory, so this also works:
-`node --test /path/to/rex-pluck/tests/*.test.mjs`. CI runs the suite and checks on macOS.
-See [VALIDATION.md](VALIDATION.md) for release evidence and live-Rex validation limits.
+Commands work from unrelated directories and checkouts whose paths contain spaces. Hosted CI is
+configured for unit/config tests and lint, not full Rex integration; it has not been run remotely.
+See [VALIDATION.md](VALIDATION.md) for release evidence and limits.
+
+Unicode 17 properties and UAX #29 grapheme segmentation are vendored, with all 766 official grapheme
+vectors checked by Lua. They need no system Unicode library or network access. Only maintainers
+regenerating that data use `python3 scripts/update-unicode.py`; normal tests do not invoke it. See
+[LICENSE.unicode](LICENSE.unicode) for the data license.
 
 Tests cover exact token values, prefix-free hints, hard versus soft wraps, blank rows, Unicode, control stripping,
 paginated UTF-8 captures, floating placement and automatic zoom, failure cleanup, reinvocation/config reload,

@@ -2,11 +2,11 @@
   "name": "rex-pluck",
   "version": "0.1.0",
   "description": "Copy hinted tokens from frozen snapshots of visible Rex terminal panes",
-  "type": "module",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
-    "check": "node scripts/check.mjs"
+    "test": "sh scripts/test.sh",
+    "test:unit": "sh scripts/test.sh --unit",
+    "check": "sh scripts/check.sh"
   }
 }

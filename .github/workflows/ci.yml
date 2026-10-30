@@ -3,14 +3,12 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
-  test-and-lint:
+  config-and-lint:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
       - name: Install development tools
         run: brew install luajit shellcheck
-      - run: npm run check
-      - run: npm test
+      - run: sh scripts/check.sh
+      - run: sh scripts/test.sh --unit
+# Real Rex/PTY integration runs locally on provisioned hosts; see VALIDATION.md.
