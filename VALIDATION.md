@@ -21,8 +21,9 @@ config, and PTY contracts now run in Lua; the JavaScript runtime and test files 
 - The configured shortcut is also exercised in actual Rex terminals, including config reload and
   reuse with its cached module. Cancellation restores the original view both with and without
   pre-existing zoom. Source output and terminal size remain unchanged.
-- A complete run before the final native-action case passed with a deliberately failing `node`
-  executable first on PATH. Every integration fixture also installs and checks its own Node trap.
+- All 21 cases and checks pass in a clean Git clone with spaces in its path, invoked from `/tmp`,
+  with a deliberately failing `node` executable first on PATH. Every integration fixture also
+  installs and checks its own Node trap. No module resolves through the source checkout.
 - `sh scripts/check.sh` passes Lua bytecode compilation, shell syntax/ShellCheck, and Python syntax.
 
 The parent reproduced the large-capture timeout: the hint was correctly clipped below the test's
