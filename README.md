@@ -9,47 +9,32 @@ Press **Cmd+Shift+Y**, type the hint over a token, and Pluck copies its original
 
 ## Install
 
-You need Rex on the server's machine and the standard POSIX tools `sh`, `cat`, and `stty`.
-There is no build step, `npm install`, or Node, Python, LuaJIT, fzf, Hunk, or Pi runtime dependency.
-Pluck runs in Rex's embedded Lua. It is tested on macOS; other platforms are not yet validated.
-
-### 1. Clone the extension
-
-Replace `REPOSITORY_URL` with this repository's Git clone URL. These instructions install
-**v0.1.1**, including configurable setup and the registry-overflow fix.
+You need Rex and the standard POSIX tools `sh`, `cat`, and `stty`. No extra runtime or build step
+is needed. Clone into Rex's configuration directory:
 
 ```sh
-config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/rex"
-mkdir -p "$config_dir"
-git clone --branch v0.1.1 REPOSITORY_URL "$config_dir/rex-pluck"
+git clone https://github.com/enkelm/rex-pluck ~/.config/rex/rex-pluck
 ```
 
-Git may print a "detached HEAD" notice because this pins a release tag. That is normal.
-The destination must not already exist. If you have installed Pluck before, see
-[Update or uninstall](#update-or-uninstall) instead. Keep the whole checkout, not just `init.lua`.
-
-### 2. Add it to Rex
-
-Append this to your existing Rex config, normally `~/.config/rex/init.lua`
-(or `$XDG_CONFIG_HOME/rex/init.lua` if you use XDG paths). **Do not replace your other configuration.**
+Add to `~/.config/rex/init.lua`, keeping your existing configuration:
 
 ```lua
-require("rex-pluck").setup{}
+require("rex-pluck").setup{ bindings = { copy = "cmd+shift+y" } }
 ```
 
-If you select a different config file with `REX_CONFIG`, place the `rex-pluck` checkout next to that
-file instead. Rex must be able to find `rex-pluck/init.lua` through its module search path.
-Do not also load an older Pluck installation.
-
-### 3. Check and reload
+Turn on **Remote Control** in **Rex → Settings → Rex Server**, then reload:
 
 ```sh
-rex config check
 rex config reload
 ```
 
-Focus a terminal pane and press **Cmd+Shift+Y**. You can also choose **Pluck: Copy Token** from Rex's
-command palette. No server restart is needed.
+Rex loads modules from beside the `init.lua` it opens. If `init.lua` is a symlink, clone next to
+the link, not its target. With `XDG_CONFIG_HOME` or `REX_CONFIG`, use that config directory instead
+of `~/.config/rex`. The tools must be on the PATH your login shell sets on the Rex server's machine.
+
+Press **Cmd+Shift+Y**, or choose **Pluck: Copy Token** from the command palette, then type a hint to
+copy. Any Rex key chord or sequence can be used; see [Configure](#configure). If Pluck is already
+installed, [update it](#update-or-uninstall) instead of cloning over it. Do not also load an older copy.
 
 ## Configure
 
@@ -94,6 +79,13 @@ can run again after a config reload without losing track of an open picker.
 
 There is no `bounds` option because the picker always zooms to fill its tab. Ownership labels and
 capture safety limits are not configuration options.
+
+For a key sequence like a tmux prefix, set `bindings.copy = "ctrl+space>y"`. Bind the prefix pressed
+twice to send it to the terminal:
+
+```lua
+rex.bind("ctrl+space>ctrl+space", "pane.send_key", { key = "ctrl+space" })
+```
 
 ## Use
 
@@ -163,7 +155,7 @@ label is not treated as a picker.
 
 ## Develop
 
-The installation is already a Git checkout. Create a branch before editing a pinned release:
+The installation is already a Git checkout. Create a branch before editing:
 
 ```sh
 cd "${XDG_CONFIG_HOME:-$HOME/.config}/rex/rex-pluck"
@@ -215,6 +207,8 @@ redacted. You do not need to share terminal captures containing private informat
 
 Unicode 17 data and all 766 official grapheme test vectors are vendored. Only maintainers refreshing
 that data need `python3 scripts/update-unicode.py` and network access; normal tests and runtime do not.
+Pluck is tested on macOS; other platforms and mixed-version remote clients are not yet validated.
+There is no Node, Python, LuaJIT, npm, fzf, Hunk, or Pi runtime dependency.
 See [VALIDATION.md](VALIDATION.md) for tested versions, results, and platform limits. Hosted CI covers
 unit/config tests and lint, not full Rex integration, and has not yet been run remotely.
 
