@@ -6,6 +6,7 @@ local Capture = require("pluck.capture")
 local Tokens = require("pluck.tokens")
 local Window = require("pluck.window")
 local UI = require("pluck.ui")
+local concat = require("pluck.concat")
 
 local function checked(result, err)
   if result == nil then error(err or "Rex call failed.", 0) end
@@ -30,7 +31,7 @@ local function base64(text)
     out[#out + 1] = index + 1 <= #text and alphabet:sub(third, third) or "="
     out[#out + 1] = index + 2 <= #text and alphabet:sub(fourth, fourth) or "="
   end
-  return table.concat(out)
+  return concat(out)
 end
 local function clean_message(message)
   message = tostring(message)
@@ -41,7 +42,7 @@ local function clean_message(message)
     else out[#out + 1] = message:sub(cursor, after - 1) end
     cursor = after
   end
-  return table.concat(out)
+  return concat(out)
 end
 local function main()
   local args = rex.args or {}

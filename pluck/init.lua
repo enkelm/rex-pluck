@@ -2,6 +2,9 @@
 local filename = debug.getinfo(1, "S").source
 if filename:sub(1, 1) == "@" then filename = filename:sub(2) end
 local directory = assert(filename:match("(.*/)"), "Load Pluck from its init.lua file.")
+if ... == nil then -- Preserve the original direct-load entrypoint.
+  return dofile(directory .. "config.lua").apply(nil, function(options) assert(loadfile(filename))(options) end)
+end
 local shell = "com.superlogical.terminal.shell"
 local function checked(result, err)
   if result == nil then error(err or "Rex call failed.", 0) end
@@ -56,4 +59,3 @@ rex.action{
     error("The invoking window closed before Pluck opened.", 0)
   end,
 }
-rex.bind("cmd+shift+y", "pluck_copy")

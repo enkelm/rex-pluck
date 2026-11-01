@@ -1,4 +1,5 @@
 local Snapshot = require("pluck.snapshot")
+local concat = require("pluck.concat")
 local M = {}
 
 local style = {
@@ -266,7 +267,7 @@ function M.pick_token(snapshot, tokens)
         frame[#frame + 1] = "\27[0m"
       end
     end
-    io.write(table.concat(frame), "\27[H\27[?2026l"); io.flush()
+    io.write(concat(frame), "\27[H\27[?2026l"); io.flush()
   end
   local function cleanup()
     if input_handle then

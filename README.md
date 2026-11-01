@@ -1,141 +1,246 @@
 # Pluck for Rex
 
-Standalone version **0.1.0**, licensed under [MIT](LICENSE).
-See [NOTICE.md](NOTICE.md) for provenance and attribution.
+**v0.1.1** · [MIT](LICENSE)
 
-Press **Cmd+Shift+Y**, or choose **Pluck: Copy Token** in Rex's command palette.
-Pluck opens a **floating picker in the current tab and automatically zooms it** to fill the window.
-It shows **frozen latest screens from every visible terminal pane in the current tab**, arranged together
-in their original split proportions and floating-layer positions. No new tab is created.
+Copy URLs, paths, filenames, and other tokens from your Rex panes without reaching for the mouse.
+Press **Cmd+Shift+Y**, type the hint over a token, and Pluck copies its original text and closes.
 
-- **Yellow** text marks copyable tokens.
-- **Bold black letters on cyan** are hints, drawn over the beginning of each token.
-- Surrounding text is **dim grey**.
+[Install](#install) · [Configure](#configure) · [Use](#use) · [Troubleshoot](#troubleshoot) · [Develop](#develop)
 
-Type a hint to copy the **original complete token**. The picker **automatically closes after copying**;
-no Enter or extra close action is needed.
-Hints replace existing cells rather than inserting badges. Each pane keeps its hard breaks and original wraps;
-thin separators identify splits and frames identify floating panes. The source layout is mapped onto the picker's
-character grid, so pane bounds are approximate rather than pixel-identical. There are no header/footer rows.
-One shared hint alphabet covers all panes: repeated values anywhere share a hint, and distinct values never collide.
-More than 26 unique values use two-letter hints; more than 676 use three. Copying waits for the complete hint.
-The original terminals' colors are replaced by Pluck's own highlighting,
-as in Herdr; the actual shades follow the Rex client's terminal palette.
+## Install
 
-- **Esc / Ctrl+C** cancel and return without changing the clipboard.
-- **Backspace / Ctrl+U** clear a partial hint.
-- Pasted text does not select hints. Only fully displayed hints can select tokens.
-- Resizing preserves pane proportions but clips each pane's frozen text instead of reflowing it, and clears partial input.
-  Restore the original size or reopen Pluck to see the complete screens; arrow/page keys do not scroll the snapshots.
-- Only panes visible before opening Pluck are included—not other tabs, detached panes, or Pluck itself.
-  If a pane was already zoomed, only that pane was visible and is captured. Unzoom first to pluck across its neighbours.
-- Original floating panes cover the content beneath them. Covered hints cannot be selected. Fully covered panes are not captured.
-  Non-terminal panes remain blank, opaque regions; Pluck does not attempt to read their content.
-- Repeating the shortcut focuses and rezooms this tab's existing picker rather than stacking another popup.
+You need Rex on the server's machine and the standard POSIX tools `sh`, `cat`, and `stty`.
+There is no build step, `npm install`, or Node, Python, LuaJIT, fzf, Hunk, or Pi runtime dependency.
+Pluck runs in Rex's embedded Lua. It is tested on macOS; other platforms are not yet validated.
 
-On copy or cancellation, Pluck restores the previous focus and zoom—including an already zoomed source pane—
-provided the picker still has focus and the original pane survives in the same tab. Deliberately switching panes
-or tabs wins: the picker closes without selecting the old origin over your current view.
+### 1. Clone the extension
 
-The original programs and tiled layout remain intact. No source pane is moved, detached, closed, or sent input;
-only visible terminal panes in the invoking tab are captured. The floating-terminal label `Pluck` is reserved for this module and allows
-reuse after a config reload. A similarly named tiled terminal is not treated as a picker.
-
-URLs (including SSH/Git URLs), paths and filenames, Git status/diff paths, upstream branch names,
-Kubernetes resource references, UUIDs, SHAs, hex values, IPv4 addresses, and long numbers are recognized.
-Enclosing sentence punctuation is excluded. Git status paths may contain spaces. This version copies only;
-it does not open links or execute anything it recognizes. Copying uses Rex's OSC 52 support for the client's
-clipboard rather than running `pbcopy` on the server.
-
-## Snapshot limits
-
-Rex does not expose the client's scroll position. **Scrolling up in the original terminal does not change what
-Pluck captures:** it always captures the latest screen, not scrolled-up history. Reopen Pluck to refresh.
-
-The frozen grid reproduces text positions, not images or original syntax colors. Unicode grapheme widths are
-approximated; unusual fonts or terminal-specific width rules may differ. A token cut off above the latest screen
-is not offered as a complete copy target. Zoom enlarges the picker, not the captured source terminal.
-
-Captured text stays in memory, never in temporary files or process arguments. Terminal controls are stripped rather
-than replayed. Long histories are read sequentially from the tail of each pane's pinned Rex snapshot. Each capture is bounded to 4 MiB; the tab is limited to 64 panes and one million total
-captured screen cells. Copied tokens have a 64 KiB limit. Unsupported or expired captures fail visibly rather than
-silently skipping a source pane or selecting another tab.
-
-## Setup
-
-Requires Rex, a POSIX shell, and standard terminal tools (`cat` and `stty`). The runtime is Rex's
-embedded Lua: no Node, Python, LuaJIT, npm packages, fzf, Hunk, or Pi dependency. Tested on macOS 27.2
-with Rex `0.0.1793131181-gdd9a20`.
-These are tested versions, not minimum requirements. Linux, native Windows, and mixed-version remote
-Rex installations have not been validated. Programs run on the Rex server's machine.
-
-Clone the complete standalone repository into a fresh destination:
+Replace `REPOSITORY_URL` with this repository's Git clone URL. These instructions install
+**v0.1.1**, including configurable setup and the registry-overflow fix.
 
 ```sh
-extension="${XDG_CONFIG_HOME:-$HOME/.config}/rex/rex-pluck"
-# Replace /path/to/rex-pluck with the source checkout or repository URL.
-git clone --branch v0.1.0 /path/to/rex-pluck "$extension"
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/rex"
+mkdir -p "$config_dir"
+git clone --branch v0.1.1 REPOSITORY_URL "$config_dir/rex-pluck"
 ```
 
-Append to your **existing** Rex `init.lua` (or the file named by `REX_CONFIG`); do not replace it:
+Git may print a "detached HEAD" notice because this pins a release tag. That is normal.
+The destination must not already exist. If you have installed Pluck before, see
+[Update or uninstall](#update-or-uninstall) instead. Keep the whole checkout, not just `init.lua`.
+
+### 2. Add it to Rex
+
+Append this to your existing Rex config, normally `~/.config/rex/init.lua`
+(or `$XDG_CONFIG_HOME/rex/init.lua` if you use XDG paths). **Do not replace your other configuration.**
 
 ```lua
-require("rex-pluck").setup()
+require("rex-pluck").setup{}
 ```
 
-Rex resolves the module directly below its config directory, just like `rex-worktrunk`. A development
-checkout can be symlinked to that path. Custom module locations can use
-`package.path = "/path/to/modules/?/init.lua;" .. package.path` before requiring it.
-Keep the complete checkout in place; runtime paths resolve relative to it. Do not also load an older copy.
+If you select a different config file with `REX_CONFIG`, place the `rex-pluck` checkout next to that
+file instead. Rex must be able to find `rex-pluck/init.lua` through its module search path.
+Do not also load an older Pluck installation.
 
-Requiring is inert. `setup()` registers the action and default shortcut, returns the module, and can
-run again after reload while an existing picker remains reusable. The launcher uses Rex's login-shell
-PATH; `REX_BIN_DIR` can prepend a directory containing Rex. The former `REX_PLUCK_NODE` override is no
-longer used. Then run:
+### 3. Check and reload
 
 ```sh
 rex config check
 rex config reload
 ```
 
-To choose another shortcut, call `rex.unbind("cmd+shift+y")` then
-`rex.bind("your-chord", "pluck_copy")` after loading the module.
-From a Rex terminal you can also invoke:
+Focus a terminal pane and press **Cmd+Shift+Y**. You can also choose **Pluck: Copy Token** from Rex's
+command palette. No server restart is needed.
+
+## Configure
+
+`setup` accepts one optional table. This is the complete configuration with its default value:
+
+```lua
+require("rex-pluck").setup{
+  bindings = {
+    copy = "cmd+shift+y",
+  },
+}
+```
+
+Use this in place of the minimal setup call, not in addition to it. For example, change the chord to
+`"ctrl+shift+y"` to use Control instead of Command.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `bindings.copy` | `"cmd+shift+y"` | Open the picker, or focus this tab's existing picker. Set to `false` to leave the action unbound. |
+| `bindings` | See above | Set the whole field to `false` to register the action without any shortcuts. |
+
+For palette-only use:
+
+```lua
+require("rex-pluck").setup{ bindings = false }
+```
+
+You can then manage shortcuts yourself with `rex.bind("ctrl+shift+y", "pluck_copy")` after setup.
+The action is also available from a Rex terminal:
 
 ```sh
 rex do pluck_copy -s "$REX_SESSION" -b "$REX_BLOCK"
 ```
 
-## Update or uninstall
+`setup()` and `setup{}` use defaults. Omitted fields also use defaults; another setup call starts
+from defaults rather than patching the previous call. Your table is copied, and reconfiguration
+removes the extension's old chords without clearing unrelated keys. Unknown options and invalid
+types are rejected before registration. Key strings use Rex's key-chord syntax.
 
-Check for local changes before fetching and checking out a new release tag; never reset a modified
-checkout. Run `rex config check && rex config reload` after updating. A running picker keeps its frozen
-data and old process: close it with Esc, then reopen. To uninstall, close the picker, remove the
-`require("rex-pluck").setup()` line, reload Rex, and remove the checkout. No snapshots or clipboard history are stored by this module.
+Importing alone does nothing. `setup` registers the action and bindings, returns the module, and
+can run again after a config reload without losing track of an open picker.
 
-## Validation
+There is no `bounds` option because the picker always zooms to fill its tab. Ownership labels and
+capture safety limits are not configuration options.
 
-Tests and assertions are Lua. Development tools are Rex, LuaJIT (unit/config cases and syntax),
-ShellCheck, and Python 3 (standard-library PTY transport only). No packages or build step are needed.
-A running user server is never required: integration starts disposable servers and synthetic terminals.
+## Use
+
+1. Focus a terminal in the tab you want to copy from.
+2. Open Pluck with the shortcut or command palette.
+3. Find the token you want. Yellow text is copyable; black letters on cyan are its hint.
+4. Type the full hint. Pluck copies the original token and closes automatically. No Enter is needed.
+
+| Key | Action |
+| --- | --- |
+| Hint letters | Select a token once its full hint is entered. |
+| Esc or Ctrl+C | Cancel without changing the clipboard. |
+| Backspace or Ctrl+U | Clear a partial hint. |
+| Open shortcut again | Focus and zoom this tab's existing picker instead of opening another. |
+
+Hints replace the beginning of the displayed token; they do not change the copied text. Repeated
+values share a hint across all panes. More than 26 unique values use two-letter hints; more than
+676 use three. Pasted text never selects a hint, and a clipped or covered hint cannot be selected.
+
+Recognized tokens include URLs (including SSH/Git URLs), paths, filenames, Git status/diff paths,
+upstream branch names, Kubernetes resources, UUIDs, SHAs, hex values, IPv4 addresses, and long numbers.
+Sentence punctuation is excluded; Git status paths can contain spaces. Pluck only copies. It does
+not open links or execute tokens. Copying uses Rex's OSC 52 clipboard support, not server-side `pbcopy`.
+
+### What gets captured
+
+- Pluck freezes the latest screens of visible terminal panes in the current tab, including floating
+  terminals. Other tabs, detached panes, and Pluck itself are excluded.
+- If a pane was already zoomed, only that pane was visible and is captured. Unzoom first to copy
+  across neighbouring panes.
+- Floating panes cover content beneath them. Fully covered panes are not captured; non-terminal
+  panes remain blank, opaque areas.
+- Split proportions and floating positions are preserved approximately on the picker's character
+  grid. Text keeps its original hard breaks and wraps. Pluck supplies its own colors and separators,
+  not the original syntax colors or images; exact shades follow the Rex client's palette.
+- Resizing clips the frozen text rather than reflowing it and clears partial input. Reopen to refresh
+  the snapshot. Arrow and page keys do not scroll it.
+
+Rex does not expose the client's scroll position. Scrolling up in a source pane therefore does not
+change the capture: Pluck always uses the latest screen, not scrolled-up history. Tokens cut off
+above that screen are not offered as complete copy targets. Zoom enlarges the picker, not the source.
+Unicode widths are approximated, so unusual fonts or client-specific width rules can differ.
+
+### Safety and restoration
+
+Source programs remain running. Pluck does not move, detach, close, or send input to source panes.
+Copying or cancelling restores the previous focus and zoom if the picker still has focus and the
+original pane survives in the same tab. If you deliberately switch panes or tabs, your new focus wins.
+
+Captures stay in memory, never in temporary files or process arguments. Terminal controls are
+stripped rather than replayed. Pinned captures are read from the tail and bounded to 4 MiB per pane,
+64 panes, and one million captured screen cells per tab. Copied tokens have a 64 KiB limit.
+Unsupported or expired captures fail visibly rather than silently skipping a pane or using another tab.
+The floating-terminal label `Pluck` is reserved for picker ownership; a tiled terminal with that
+label is not treated as a picker.
+
+## Troubleshoot
+
+| Problem | What to check |
+| --- | --- |
+| `module rex-pluck not found` | The whole checkout must be named `rex-pluck` beside the active Rex config file. Check the path reported by `rex config check`, especially with `REX_CONFIG`. |
+| `registry overflow` | Update to `v0.1.1` or later; `v0.1.0` has this bug. Press Enter to close the failed picker, then reopen it. |
+| A recent code change is not visible | Close the old picker and reopen it. A running picker keeps its old Lua process and frozen snapshot. For config changes, also run `rex config check` and `rex config reload`. |
+| A token is missing or cannot be selected | It may be covered, clipped, or outside the latest screen. Restore the window size or reopen Pluck. |
+| Copying does not reach the expected clipboard | Pluck uses the connected Rex client's OSC 52 support. It does not write the server machine's clipboard directly. |
+| The launcher cannot find Rex | Make Rex available on the server's login-shell PATH. `REX_BIN_DIR` can prepend a directory containing Rex. |
+
+## Develop
+
+The installation is already a Git checkout. Create a branch before editing a pinned release:
 
 ```sh
-sh scripts/test.sh --unit  # LuaJIT; no Rex installation required
-sh scripts/test.sh         # all cases, including real Rex/PTY integration
-sh scripts/check.sh        # Lua, shell/ShellCheck, Python syntax
+cd "${XDG_CONFIG_HOME:-$HOME/.config}/rex/rex-pluck"
+git switch -c my-change
 ```
 
-Commands work from unrelated directories and checkouts whose paths contain spaces. Hosted CI is
-configured for unit/config tests and lint, not full Rex integration; it has not been run remotely.
-See [VALIDATION.md](VALIDATION.md) for release evidence and limits.
+No build step is required. To contribute, fork this repository and push your branch to your fork,
+then open a pull request. If you prefer a checkout elsewhere, replace the installed directory
+with a symlink to it after moving the old checkout somewhere safe. Do not delete local edits.
+For other module locations, prepend `"/path/to/modules/?/init.lua;"` to `package.path` before requiring.
 
-Unicode 17 properties and UAX #29 grapheme segmentation are vendored, with all 766 official grapheme
-vectors checked by Lua. They need no system Unicode library or network access. Only maintainers
-regenerating that data use `python3 scripts/update-unicode.py`; normal tests do not invoke it. See
-[LICENSE.unicode](LICENSE.unicode) for the data license.
+### Tools and checks
 
-Tests cover exact token values, prefix-free hints, hard versus soft wraps, blank rows, Unicode, control stripping,
-paginated UTF-8 captures, floating placement and automatic zoom, failure cleanup, reinvocation/config reload,
-guarded focus/zoom restoration, split/floating-pane composition, cross-pane copying and duplicate hints, occlusion,
-pre-existing zoom, fixed-position colored hints, and real-PTY copy/cancel/input handling. Clipboard protocol
-bytes are checked without changing the host clipboard or interacting with a live agent.
+Development needs LuaJIT, ShellCheck, and Python 3 in addition to Rex. Python is only the test PTY
+transport, not a runtime dependency. On macOS with Homebrew:
+
+```sh
+brew install luajit shellcheck python
+```
+
+From the checkout:
+
+```sh
+sh scripts/test.sh --unit  # LuaJIT unit/config tests; Rex is not needed
+sh scripts/check.sh        # Lua, shell/ShellCheck, and Python syntax
+sh scripts/test.sh         # full suite, including real Rex/PTY integration
+```
+
+Tests start disposable Rex servers and synthetic terminals. They do not reload or stop your server,
+send input to your panes, or change the host clipboard. OSC 52 bytes are intercepted and checked.
+There are no npm or third-party Lua packages to install. Scripts also work from other directories
+and checkout paths containing spaces.
+
+### Where to change things
+
+| Files | Responsibility |
+| --- | --- |
+| `init.lua`, `pluck/init.lua`, `pluck/config.lua` | Public setup, action registration, picker creation/reuse, and bindings. |
+| `pluck/cli.lua`, `pluck/capture.lua`, `pluck/window.lua` | Verified source selection, bounded captures, and visible-pane composition. |
+| `pluck/snapshot.lua`, `pluck/tokens.lua` | Terminal text, Unicode positions, token recognition, and shared hints. |
+| `pluck/ui.lua`, `pluck/concat.lua` | Drawing, input handling, and registry-safe concatenation. |
+| `pluck/launch.sh`, `pluck/dismiss.lua` | Process lifecycle and guarded focus/zoom restoration. |
+| `tests/` | Lua assertions and real Rex/PTY fixtures. |
+
+After runtime edits, close and reopen Pluck. After setup/binding edits, check and reload Rex too.
+For a bug fix, add a regression that fails before the fix, then run the checks and full suite.
+Reports should include `rex version`, the OS, reproduction steps, and the exact error with secrets
+redacted. You do not need to share terminal captures containing private information.
+
+Unicode 17 data and all 766 official grapheme test vectors are vendored. Only maintainers refreshing
+that data need `python3 scripts/update-unicode.py` and network access; normal tests and runtime do not.
+See [VALIDATION.md](VALIDATION.md) for tested versions, results, and platform limits. Hosted CI covers
+unit/config tests and lint, not full Rex integration, and has not yet been run remotely.
+
+## Update or uninstall
+
+Inspect local changes and save them before switching versions. Choose the desired release from
+[CHANGELOG.md](CHANGELOG.md), then fetch and check out its tag:
+
+```sh
+extension="${XDG_CONFIG_HOME:-$HOME/.config}/rex/rex-pluck"
+git -C "$extension" status --short
+# Once your local changes are safely committed or stashed:
+git -C "$extension" fetch --tags origin
+git -C "$extension" switch --detach v0.1.1  # replace with the release you want
+rex config check
+rex config reload
+```
+
+Review [CHANGELOG.md](CHANGELOG.md) before updating. Close and reopen a running picker to load new
+runtime code. Never reset a modified checkout just to update it.
+
+To uninstall, close the picker, remove its setup call from your Rex config, and reload Rex. You can
+then remove the checkout. Pluck stores no snapshots or clipboard history to clean up.
+
+## License and credits
+
+Code is [MIT-licensed](LICENSE). Unicode data uses [Unicode License v3](LICENSE.unicode).
+The hint-based interaction was inspired by [Herdr Pluck](https://github.com/rmarganti/herdr-pluck).
+[NOTICE.md](NOTICE.md) records attribution and the upstream license-file provenance caveat.

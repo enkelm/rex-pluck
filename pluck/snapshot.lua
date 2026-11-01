@@ -1,5 +1,6 @@
 local M = {}
 local Unicode = require("pluck.unicode")
+local concat = require("pluck.concat")
 
 local function codepoint(text, index)
   local first = text:byte(index)
@@ -132,7 +133,7 @@ local function strip_controls(content)
     else index = index + 1 end
   end
   if span <= #content then out[#out + 1] = content:sub(span) end
-  local text = table.concat(out):gsub("\r\n", "\n")
+  local text = concat(out):gsub("\r\n", "\n")
   local clean, cursor, clean_span = {}, 1, 1
   while cursor <= #text do
     local cp, after = codepoint(text, cursor)
@@ -145,7 +146,7 @@ local function strip_controls(content)
     cursor = after
   end
   if clean_span <= #text then clean[#clean + 1] = text:sub(clean_span) end
-  return table.concat(clean)
+  return concat(clean)
 end
 M.plain_snapshot = strip_controls
 

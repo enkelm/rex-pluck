@@ -1,19 +1,16 @@
 local H = assert(_G.H)
 local function decode_base64(encoded)
   local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  local out = {}
-  for index = 1, #encoded, 4 do
-    local a = alphabet:find(encoded:sub(index, index), 1, true) - 1
-    local b = alphabet:find(encoded:sub(index + 1, index + 1), 1, true) - 1
-    local c_char, d_char = encoded:sub(index + 2, index + 2), encoded:sub(index + 3, index + 3)
+  return (encoded:gsub("....", function(block)
+    local a = alphabet:find(block:sub(1, 1), 1, true) - 1
+    local b = alphabet:find(block:sub(2, 2), 1, true) - 1
+    local c_char, d_char = block:sub(3, 3), block:sub(4, 4)
     local c = c_char == "=" and 0 or alphabet:find(c_char, 1, true) - 1
     local d = d_char == "=" and 0 or alphabet:find(d_char, 1, true) - 1
     local value = a * 262144 + b * 4096 + c * 64 + d
-    out[#out + 1] = string.char(math.floor(value / 65536) % 256)
-    if c_char ~= "=" then out[#out + 1] = string.char(math.floor(value / 256) % 256) end
-    if d_char ~= "=" then out[#out + 1] = string.char(value % 256) end
-  end
-  return table.concat(out)
+    local bytes = string.char(math.floor(value / 65536) % 256, math.floor(value / 256) % 256, value % 256)
+    return bytes:sub(1, c_char == "=" and 1 or d_char == "=" and 2 or 3)
+  end))
 end
 local function copied(ui)
   local result = {}
@@ -40,6 +37,40 @@ H.test("Rex embedded Lua paints fixed colored hints and sends only the selected 
   ui:done()
   H.equal(copied(ui), { "/tmp/项目.ts:2" }, "OSC 52 must preserve exact UTF-8 bytes, not painted hint characters")
   H.contains(fixture:call({ "capture", "-s", fixture.session, "-b", fixture.source, "--trim" }), "https://example.test/a?q=x")
+end)
+
+H.test("a dense large viewport paints and copies a long UTF-8 token without registry overflow", function(test)
+  local fixture = H.fixture(test)
+  local columns, rows = 240, 80
+  local value = "https://copy.test/" .. string.rep("界", 512) .. string.rep("x", 4096)
+  fixture:new_session(string.rep(string.rep(" ", columns - 1) .. "x\r\n", 40) .. value .. "\r\n")
+  fixture:popup()
+  -- A persistent owner keeps the synthetic source at a real desktop-sized viewport.
+  -- One-shot resize requests lose to the existing owner's 80x24 preference.
+  local ready = fixture.directory .. "/owner-ready"
+  local script = "local o,e=rex.session.own_block{block_ids={rex.block_id}}; assert(o,e); "
+    .. "local s,se=rex.block.call('com.superlogical.terminal','resize',{block_id=rex.block_id,columns=240,rows=80}); assert(s,se); "
+    .. "local f=assert(io.open(" .. H.json(ready) .. ",'w')); f:write('ready'); f:close(); rex.sleep(60)"
+  local owner = assert(rex.exec.start({ fixture.rexbin, "--server", fixture.server_address, "--autostart=false",
+    "do", "-s", fixture.session, "-b", fixture.source, "-e", script }, { env = fixture.env, stdout = false }))
+  test:after(function() if owner:running() then owner:kill("SIGTERM") end; owner:wait(10) end)
+  H.wait(function()
+    if not owner:running() then error(assert(owner:wait(1)).stderr, 0) end
+    return H.read(ready) == "ready"
+  end, "The synthetic terminal owner did not resize the source")
+  local size = fixture:json({ "block", "call", "-s", fixture.session, "-b", fixture.source, "size" })
+  H.equal({ size.columns, size.rows }, { columns, rows })
+  local ui = H.terminal(test, fixture, { columns = columns, rows = rows })
+  H.wait(function()
+    local output = ui:output()
+    assert(not output:find("registry overflow", 1, true), output:match("Pluck: [^\r\n]+"))
+    return output:find("tokens · hint: _", 1, true)
+  end, "The dense picker did not paint")
+  ui:press("a")
+  ui:done()
+  H.equal(copied(ui), { value }, "A large frame and long copy must preserve the exact UTF-8 bytes")
+  H.equal(require("pluck.snapshot").plain_snapshot(string.rep("\27[31mx\27[0m\t", 70000)), string.rep("x ", 70000),
+    "ANSI-heavy captures must also sanitize without overflowing Rex's registry")
 end)
 
 H.test("Escape cancels without OSC 52 or source input; bracketed paste never selects hints", function(test)
@@ -161,6 +192,17 @@ end)
 H.test("the configured shortcut launches Lua, reuses its picker after reload, and cancels without changing source output or size", function(test)
   local fixture = H.fixture(test)
   fixture:new_session("VISIBLE\r\nhttps://visible.test/\r\n")
+  local original_config = H.read(fixture.env.REX_CONFIG)
+  H.write(fixture.env.REX_CONFIG, original_config .. 'require("rex-pluck").setup{bindings=false}\n')
+  fixture:call({ "config", "reload" })
+  H.equal(fixture:json({ "api", "call", "client.keymap", "{}" }).bindings, {}, "Disabling defaults must clear the actual Rex keymap")
+  H.write(fixture.env.REX_CONFIG, original_config .. 'require("rex-pluck").setup{bindings={copy="alt+y"}}\n')
+  fixture:call({ "config", "reload" })
+  local found = 0
+  for _, binding in ipairs(fixture:json({ "api", "call", "client.keymap", "{}" }).bindings) do
+    if binding.action == "pluck_copy" then H.equal(binding.keys, { "alt+y" }); found = found + 1 end
+  end
+  H.equal(found, 1, "Custom setup must replace the default chord in the resolved keymap")
   H.wait(function() return fixture:call({ "capture", "-s", fixture.session, "-b", fixture.source, "--trim" }):find("https://visible.test/", 1, true) end, "Source did not paint")
   for _, zoomed in ipairs({ false, true }) do
     if zoomed then fixture:call({ "zoom", "-s", fixture.session, fixture.source, "--on" }) end

@@ -1,6 +1,6 @@
 {
   "name": "rex-pluck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Copy hinted tokens from frozen snapshots of visible Rex terminal panes",
   "private": true,
   "license": "MIT",

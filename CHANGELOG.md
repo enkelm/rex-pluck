@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1 - 2026-11-01
+
+- Accept one optional setup table with `bindings.copy` or `bindings = false`; keep automatic zoom.
+- Validate options before registration and remove obsolete shortcuts on reconfiguration.
+- Fix `ui.lua:269: registry overflow` on dense or large viewports by batching concatenations.
+  Apply the same protection to long clipboard payloads, ANSI cleanup, and error messages without
+  truncating captures or changing safety limits.
+- Add a real Rex regression for a 240×80 viewport, exact long UTF-8 copying, and ANSI-heavy input.
+- Reorganize the README around installation, configuration, usage, troubleshooting, and contributing.
+
 ## 0.1.0
 
 - Configure with `require("rex-pluck").setup()`, matching Worktrunk; requiring alone is inert.

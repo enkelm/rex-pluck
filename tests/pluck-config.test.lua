@@ -11,7 +11,8 @@ H.test("requiring rex-pluck is inert; cached setup restores registration for pla
   package.preload["rex-pluck"] = function() return dofile(H.root .. "/init.lua") end
   for _, prefix in ipairs({ "@", "" }) do
     local actions, bindings = {}, {}
-    rex = { action = function(value) actions[value.name] = value end, bind = function(key, name) bindings[key] = name end }
+    rex = { action = function(value) actions[value.name] = value end, bind = function(key, name) bindings[key] = name end,
+      unbind = function(key) bindings[key] = nil end }
     package.loaded["rex-pluck"] = nil
     local pending = true
     debug.getinfo = function(level, what)
@@ -27,6 +28,23 @@ H.test("requiring rex-pluck is inert; cached setup restores registration for pla
     actions, bindings = {}, {} -- Rex clears registrations when reloading its config.
     module.setup()
     assert(actions.pluck_copy and bindings["cmd+shift+y"] == "pluck_copy", "Cached setup must restore registrations after reload")
+    bindings["ctrl+q"] = "unrelated"
+    local custom = { bindings = { copy = "alt+y" } }
+    assert(module.setup(custom) == module)
+    assert(bindings["alt+y"] == "pluck_copy" and bindings["cmd+shift+y"] == nil)
+    custom.bindings.copy = "alt+x"
+    for _, invalid in ipairs({ true, { binding = "alt+y" }, { bindings = "alt+y" }, { bindings = { typo = false } },
+      { bindings = { copy = 42 } }, { bindings = { copy = " " } }, { bounds = { 0, 0, 1, 1 } } }) do
+      assert(not pcall(module.setup, invalid), "Unknown or invalid config must be rejected")
+      assert(bindings["alt+y"] == "pluck_copy", "Rejected config must preserve the old shortcut")
+    end
+    assert(bindings["alt+x"] == nil, "Config must be copied, not retained by reference")
+    module.setup{ bindings = { copy = false } }
+    assert(bindings["alt+y"] == nil and bindings["cmd+shift+y"] == nil and actions.pluck_copy)
+    module.setup{ bindings = false }
+    assert(bindings["ctrl+q"] == "unrelated")
+    module.setup()
+    assert(bindings["cmd+shift+y"] == "pluck_copy" and bindings["alt+y"] == nil)
   end
 end)
 local function fingerprint(value)
@@ -70,6 +88,7 @@ H.test("Pluck opens one auto-zoomed floating picker in the invoking tab, preserv
   rex = {
     action = function(value) action = value end,
     bind = function(key, name) binding = { key, name } end,
+    unbind = function() binding = nil end,
     call = function(method) assert(method == "server.status"); return { instance_id = "server:test" } end,
     layout = { block = function(value) return { block = value } end },
     session = {
